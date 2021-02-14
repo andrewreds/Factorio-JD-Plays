@@ -72,6 +72,7 @@ Teleporter.PlayerOnTeleporter = function(characterEntity, teleporterEntity)
 
         EventScheduler.ScheduleEvent(teleportedPlayerEntry.timeToDie, "Teleporter.OnTimeToDieReached", teleportedPlayerEntry.id)
         global.teleporter.teleportedPlayers[teleportedPlayerEntry.id] = teleportedPlayerEntry
+        Interfaces.Call("PowerDrain.StartCycle", player)
     else
         -- Player is leaving the other team's side and returning to their team's side.
         Teleporter.ReturnPlayerHome(player)

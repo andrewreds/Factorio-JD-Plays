@@ -2,6 +2,7 @@ local EventScheduler = require("utility/event-scheduler")
 local PlayerHome = require("modes/jd-p0ober-split-factory/scripts/player-home")
 local Divider = require("modes/jd-p0ober-split-factory/scripts/divider")
 local Teleporter = require("modes/jd-p0ober-split-factory/scripts/teleporter")
+local PowerDrain = require("modes/jd-p0ober-split-factory/scripts/power-drain")
 
 if settings.startup["jdplays_mode"].value ~= "jd_p0ober_split_factory" then
     return
@@ -11,6 +12,7 @@ local function CreateGlobals()
     PlayerHome.CreateGlobals()
     Divider.CreateGlobals()
     Teleporter.CreateGlobals()
+    PowerDrain.CreateGlobals()
 end
 
 local function OnLoad()
@@ -18,6 +20,7 @@ local function OnLoad()
     PlayerHome.OnLoad()
     Divider.OnLoad()
     Teleporter.OnLoad()
+    PowerDrain.OnLoad()
 end
 
 --local function OnSettingChanged(event)
