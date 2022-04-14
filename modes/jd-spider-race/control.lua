@@ -1,4 +1,6 @@
 local EventScheduler = require("utility/event-scheduler")
+local PlayerHome = require("modes/jd-spider-race/scripts/player-home")
+local Divider = require("modes/jd-spider-race/scripts/divider")
 local Spider = require("modes.jd-spider-race.scripts.spider")
 
 if settings.startup["jdplays_mode"].value ~= "jd_spider_race" then
@@ -6,17 +8,19 @@ if settings.startup["jdplays_mode"].value ~= "jd_spider_race" then
 end
 
 local function CreateGlobals()
+    PlayerHome.CreateGlobals()
     Spider.CreateGlobals()
 end
 
 local function OnLoad()
     --Any Remote Interface registration calls can go in here or in root of control.lua
+    PlayerHome.OnLoad()
     Spider.OnLoad()
 end
 
 --local function OnSettingChanged(event)
 --if event == nil or event.setting == "xxxxx" then
---	local x = tonumber(settings.global["xxxxx"].value)
+--  local x = tonumber(settings.global["xxxxx"].value)
 --end
 --end
 
@@ -55,3 +59,4 @@ script.on_event(
         end
     end
 )
+
