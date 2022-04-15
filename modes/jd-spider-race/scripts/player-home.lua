@@ -8,6 +8,7 @@ local SpawnYOffset = 20
 
 PlayerHome.CreateGlobals = function()
     global.playerHome = global.playerHome or {}
+
     global.playerHome.teams = global.playerHome.teams or {}
     --[[
         [id] = {
@@ -15,16 +16,23 @@ PlayerHome.CreateGlobals = function()
             spawnPosition = position of this team's spawn.
             playerIds = table of the player ids who have joined this team.
             playerNames = table of player names who will join this team on first connect.
-            teleporterEntity = entity of the teleporter.
             otherTeam = ref to the other teams global object.
         }
     ]]
     global.playerHome.playerIdToTeam = global.playerHome.playerIdToTeam or {}
+
 end
 
 PlayerHome.OnLoad = function()
     Events.RegisterHandlerEvent(defines.events.on_player_respawned, "PlayerHome.OnPlayerSpawn", PlayerHome.OnPlayerSpawn)
     Events.RegisterHandlerEvent(defines.events.on_player_created, "PlayerHome.OnPlayerCreated", PlayerHome.OnPlayerCreated)
+    Events.RegisterHandlerEvent(defines.events.on_entity_damaged, "PlayerHome.OnEntityDamaged", PlayerHome.OnEntityDamaged, {
+        -- Don't give us biter damage events
+        -- Worms are "turrents". So this filter doesn't include them :(
+        {filter = "type", type = "unit", invert = true},
+        {filter = "type", type = "unit-spawner", invert = true, mode = "and"},
+    })
+
 end
 
 PlayerHome.OnStartup = function()
@@ -33,40 +41,39 @@ PlayerHome.OnStartup = function()
     if global.playerHome.teams["north"] == nil then
         PlayerHome.CreateTeam("north", global.divider.dividerMiddleYPos - SpawnYOffset)
         PlayerHome.CreateTeam("south", global.divider.dividerMiddleYPos + SpawnYOffset)
-        global.playerHome.teams["north"].otherTeam = global.playerHome.teams["east"]
-        global.playerHome.teams["south"].otherTeam = global.playerHome.teams["west"]
+        global.playerHome.teams["north"].otherTeam = global.playerHome.teams["south"]
+        global.playerHome.teams["south"].otherTeam = global.playerHome.teams["north"]
     end
 end
 
-local function on_entity_damaged(event)
-	if event.force == event.entity.force then
-	    -- allow friendly fire to own team
-	    return false
-	end
+PlayerHome.OnEntityDamaged = function(event)
+    -- Undo any damage done to the opposing team
 
-	local from_player_match = false
-	local to_player_match = false
+    local event_force = event.force
+    local event_entity = event.entity
 
-	for force_name, _ in pairs(global.playerHome.teams) do
-	    if event.force.name == force_name then
-		from_player_match = true
-	    end
-	    if event.entity.force.name == force_name then
-		to_player_match = true
-	    end
-	end
+    if event_force == nil or event_entity == nil then
+        -- should never happen. Defensive coding
+        return false
+    end
 
-	if not from_player_match or not to_player_match then
-	    return false
-	end
+    local from_force_name = event_force.name
+    local to_force_name = event_entity.force.name
 
-	-- damage is cross player force. Null out
-        event.entity.health = event.entity.health + event.final_damage_amount
+    -- We could generically loop over all forces, but lets squeeze any
+    -- performance we can out of this code
+    if (from_force_name == "north" and to_force_name == "south") or
+            (from_force_name == "south" and to_force_name == "north") then
+
+        -- undo the damage done
+        event_entity.health = event_entity.health + event.final_damage_amount
 
         return true
+    end
+
+    return false
 end
 
-script.on_event(defines.events.on_entity_damaged, on_entity_damaged)
 
 PlayerHome.CreateTeam = function(teamId, spawnYPos)
     local team = {
@@ -81,13 +88,13 @@ PlayerHome.CreateTeam = function(teamId, spawnYPos)
 
     -- Don't auto target other forces
     for other_force_name, _ in pairs(global.playerHome.teams) do
-	other_force = game.forces[other_force_name]
-	other_enemy_force = game.forces[other_force_name.."_enemy"]
+        other_force = game.forces[other_force_name]
+        other_enemy_force = game.forces[other_force_name.."_enemy"]
 
-	force.set_cease_fire(other_force, true)
-	force.set_cease_fire(other_enemy_force, true)
-	enemy_force.set_cease_fire(other_force, true)
-	enemy_force.set_cease_fire(other_enemy_force, true)
+        force.set_cease_fire(other_force, true)
+        force.set_cease_fire(other_enemy_force, true)
+        enemy_force.set_cease_fire(other_force, true)
+        enemy_force.set_cease_fire(other_enemy_force, true)
     end
 
     global.playerHome.teams[teamId] = team

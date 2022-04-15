@@ -4,10 +4,11 @@ local Events = require("utility/events")
 Divider.CreateGlobals = function()
     global.divider = global.divider or {}
     -- The divider must all be within 1 chunk
-    global.divider.dividerStartYPos = global.divider.dividerStartYPos or -18 -- X pos in world of divide tiles start.
-    global.divider.dividerEndYPos = global.divider.dividerEndYPos or -17 -- X pos in world of divide tiles end.
-    global.divider.dividerMiddleYPos = global.divider.dividerMiddleYPos or -17 -- X Pos of divide entity.
-    global.divider.chunkYPos = global.divider.chunkYPos or -1 -- Chunk X pos when looking for chunks generated.
+    -- Placing the divider at exactly 0, gives an even gap for ribbon world
+    global.divider.dividerStartYPos = global.divider.dividerStartYPos or -1 -- Y pos in world of divide tiles start.
+    global.divider.dividerEndYPos = global.divider.dividerEndYPos or 0 -- Y pos in world of divide tiles end.
+    global.divider.dividerMiddleYPos = global.divider.dividerMiddleYPos or 0 -- Y Pos of divide entity.
+    global.divider.chunkYPos = global.divider.chunkYPos or 0 -- Chunk Y pos when looking for chunks generated.
 end
 
 Divider.OnLoad = function()
@@ -16,7 +17,29 @@ Divider.OnLoad = function()
     Events.RegisterHandlerEvent(defines.events.on_robot_built_tile, "Divider.OnTilePlaced", Divider.OnTilePlaced)
 end
 
+local function flood_area(surface, area)
+    local water_tiles = {}
+
+    for x = area.left_top.x, area.right_bottom.x do
+        for y = area.left_top.y, area.right_bottom.y do
+            table.insert(water_tiles, {name="water", position={x, y}})
+        end
+    end
+
+    surface.set_tiles(water_tiles, true, true, true, true)
+end
+
 Divider.OnChunkGenerated = function(event)
+    local surface, area = event.surface, event.area
+
+    -- Fill east of spawn with water
+    -- TODO: Get a nice coast line?
+
+    if event.position.x > 0 then
+        -- TODO: The divide is crossable at the water edge
+        flood_area(surface, area)
+    end
+
     -- This requires both tiles and entity to all be in the same chunk. So not centered down chunk border.
     if event.position.y ~= global.divider.chunkYPos then
         return
@@ -24,7 +47,7 @@ Divider.OnChunkGenerated = function(event)
 
     -- Place the blocking land tiles down. Ignore water tiles as catch when landfill is placed.
     -- Check beyond this chunk in the next 3 partially generated chunks (map gen weirdness) and fill them with our blocking tiles. Stops biters pathing around the top/bottom of the partially generated map.
-    local surface, landTilesToReplace = event.surface, {}
+    local landTilesToReplace = {}
     local yMin, yMax
     if event.area.left_top.x >= 0 then
         xMin = event.area.left_top.x
@@ -53,6 +76,7 @@ Divider.OnChunkGenerated = function(event)
 
     -- Place the beam effect. Overlap by a tile as we have overlaped all the graphics bits of the beam prototype.
     surface.create_entity {name = "jd_plays-jd_spider_race-divider_beam", position = {0, 0}, target_position = {x = event.area.left_top.x - 1, y = global.divider.dividerMiddleYPos}, source_position = {x = event.area.left_top.x + 33, y = global.divider.dividerMiddleYPos}}
+
 end
 
 Divider.OnTilePlaced = function(event)
