@@ -86,7 +86,7 @@ WaterBarrier.IsChunkBeyondBarrierChunkStart = function(chunkPos)
 end
 
 WaterBarrier.CalculateShorelinesForVector = function(leftTopTileInChunk)
-    local debug = true
+    local debug = false
     if barrierOrientation == barrierOrientations.horizontal then
         if barrierDirection == barrierDirections.positive then
             local leftTopTileInChunkX = leftTopTileInChunk.x

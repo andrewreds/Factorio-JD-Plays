@@ -19,12 +19,24 @@ end
 
 
 Divider.OnChunkGenerated = function(event)
+    local surface, area = event.surface, event.area
+
+    -- Force biters to be on the correct force
+    local area, surface = event.area, event.surface
+    for _, base_entity in pairs(surface.find_entities_filtered({area=area, force="enemy"})) do
+        if base_entity.valid then
+            if base_entity.position.y <= 0 then
+                base_entity.force = "north_enemy"
+            else
+                base_entity.force = "south_enemy"
+            end
+        end
+    end
+
     -- This requires both tiles and entity to all be in the same chunk. So not centered down chunk border.
     if event.position.y ~= global.divider.chunkYPos then
         return
     end
-
-    local surface, area = event.surface, event.area
 
     -- Place the blocking land tiles down. Ignore water tiles as catch when landfill is placed.
     -- Check beyond this chunk in the next 3 partially generated chunks (map gen weirdness) and fill them with our blocking tiles. Stops biters pathing around the top/bottom of the partially generated map.

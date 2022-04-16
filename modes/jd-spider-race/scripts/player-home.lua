@@ -34,7 +34,6 @@ PlayerHome.OnLoad = function()
         {filter = "type", type = "unit", invert = true},
         {filter = "type", type = "unit-spawner", invert = true, mode = "and"},
     })
-
 end
 
 PlayerHome.OnStartup = function()
@@ -46,6 +45,20 @@ PlayerHome.OnStartup = function()
         global.playerHome.teams["north"].otherTeam = global.playerHome.teams["south"]
         global.playerHome.teams["south"].otherTeam = global.playerHome.teams["north"]
     end
+
+    -- disable autofiring cross border
+    local north = game.forces["north"]
+    local north_enemy = game.forces["north_enemy"]
+    local south = game.forces["south"]
+    local south_enemy = game.forces["south_enemy"]
+    north.set_cease_fire(south, true)
+    north.set_cease_fire(south_enemy, true)
+    south.set_cease_fire(north, true)
+    south.set_cease_fire(north_enemy, true)
+    north_enemy.set_cease_fire(south, true)
+    north_enemy.set_cease_fire(south_enemy, true)
+    south_enemy.set_cease_fire(north, true)
+    south_enemy.set_cease_fire(north_enemy, true)
 end
 
 PlayerHome.OnEntityDamaged = function(event)
@@ -87,17 +100,6 @@ PlayerHome.CreateTeam = function(teamId, spawnYPos)
 
     local force = game.create_force(teamId)
     local enemy_force = game.create_force(teamId.."_enemy")
-
-    -- Don't auto target other forces
-    for other_force_name, _ in pairs(global.playerHome.teams) do
-        other_force = game.forces[other_force_name]
-        other_enemy_force = game.forces[other_force_name.."_enemy"]
-
-        force.set_cease_fire(other_force, true)
-        force.set_cease_fire(other_enemy_force, true)
-        enemy_force.set_cease_fire(other_force, true)
-        enemy_force.set_cease_fire(other_enemy_force, true)
-    end
 
     global.playerHome.teams[teamId] = team
 end
@@ -157,22 +159,23 @@ PlayerHome.OnMarkedForDeconstruction = function(event)
     -- stop deconstruction from the wrong side of the wall
 
     local player = game.get_player(event.player_index)
+    local entity = event.entity
 
     if player == nil then
         return
     end
 
     local team = global.playerHome.playerIdToTeam[player.index]
-    if team == nil then
+    if team == nil or entity == nil or not entity.valid then
         return
     end
 
     if event.entity.position.y < 0 then
         if team.id == "south" then
-            event.entity.cancel_deconstruction(player.force, player)
+            entity.cancel_deconstruction(player.force, player)
         end
     elseif team.id == "north" then
-        event.entity.cancel_deconstruction(player.force, player)
+        entity.cancel_deconstruction(player.force, player)
     end
 end
 
@@ -180,24 +183,25 @@ end
 PlayerHome.OnBuiltEntity = function(event)
     -- stop building on the wrong side
     local player = game.get_player(event.player_index)
+
+    if player == nil then
+	return
+    end
+    
     local team = global.playerHome.playerIdToTeam[player.index]
-    if team == nil then
+    local entity = event.created_entity
+
+    if team == nil or entity == nil or not entity.valid then
         return
     end
 
-    if event.created_entity.position.y < 0 then
+    if entity.position.y < 0 then
         if team.id == "south" then
-            event.created_entity.destroy()
+            entity.destroy()
          end
     elseif team.id == "north" then
-        event.created_entity.destroy()
+        entity.destroy()
     end
 end
-
-
--- TOOD: Do we want on_player_dropped_item?
-
-
-
 
 return PlayerHome
