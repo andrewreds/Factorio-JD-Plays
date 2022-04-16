@@ -17,33 +17,14 @@ Divider.OnLoad = function()
     Events.RegisterHandlerEvent(defines.events.on_robot_built_tile, "Divider.OnTilePlaced", Divider.OnTilePlaced)
 end
 
-local function flood_area(surface, area)
-    local water_tiles = {}
-
-    for x = area.left_top.x, area.right_bottom.x do
-        for y = area.left_top.y, area.right_bottom.y do
-            table.insert(water_tiles, {name="water", position={x, y}})
-        end
-    end
-
-    surface.set_tiles(water_tiles, true, true, true, true)
-end
 
 Divider.OnChunkGenerated = function(event)
-    local surface, area = event.surface, event.area
-
-    -- Fill east of spawn with water
-    -- TODO: Get a nice coast line?
-
-    if event.position.x > 0 then
-        -- TODO: The divide is crossable at the water edge
-        flood_area(surface, area)
-    end
-
     -- This requires both tiles and entity to all be in the same chunk. So not centered down chunk border.
     if event.position.y ~= global.divider.chunkYPos then
         return
     end
+
+    local surface, area = event.surface, event.area
 
     -- Place the blocking land tiles down. Ignore water tiles as catch when landfill is placed.
     -- Check beyond this chunk in the next 3 partially generated chunks (map gen weirdness) and fill them with our blocking tiles. Stops biters pathing around the top/bottom of the partially generated map.

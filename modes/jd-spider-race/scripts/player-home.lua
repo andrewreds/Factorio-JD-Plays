@@ -26,6 +26,8 @@ end
 PlayerHome.OnLoad = function()
     Events.RegisterHandlerEvent(defines.events.on_player_respawned, "PlayerHome.OnPlayerSpawn", PlayerHome.OnPlayerSpawn)
     Events.RegisterHandlerEvent(defines.events.on_player_created, "PlayerHome.OnPlayerCreated", PlayerHome.OnPlayerCreated)
+    Events.RegisterHandlerEvent(defines.events.on_marked_for_deconstruction, "PlayerHome.OnMarkedForDeconstruction", PlayerHome.OnMarkedForDeconstruction)
+    Events.RegisterHandlerEvent(defines.events.on_built_entity, "PlayerHome.OnBuiltEntity", PlayerHome.OnBuiltEntity)
     Events.RegisterHandlerEvent(defines.events.on_entity_damaged, "PlayerHome.OnEntityDamaged", PlayerHome.OnEntityDamaged, {
         -- Don't give us biter damage events
         -- Worms are "turrents". So this filter doesn't include them :(
@@ -150,5 +152,52 @@ PlayerHome.OnPlayerSpawn = function(event)
         return
     end
 end
+
+PlayerHome.OnMarkedForDeconstruction = function(event)
+    -- stop deconstruction from the wrong side of the wall
+
+    local player = game.get_player(event.player_index)
+
+    if player == nil then
+        return
+    end
+
+    local team = global.playerHome.playerIdToTeam[player.index]
+    if team == nil then
+        return
+    end
+
+    if event.entity.position.y < 0 then
+        if team.id == "south" then
+            event.entity.cancel_deconstruction(player.force, player)
+        end
+    elseif team.id == "north" then
+        event.entity.cancel_deconstruction(player.force, player)
+    end
+end
+
+
+PlayerHome.OnBuiltEntity = function(event)
+    -- stop building on the wrong side
+    local player = game.get_player(event.player_index)
+    local team = global.playerHome.playerIdToTeam[player.index]
+    if team == nil then
+        return
+    end
+
+    if event.created_entity.position.y < 0 then
+        if team.id == "south" then
+            event.created_entity.destroy()
+         end
+    elseif team.id == "north" then
+        event.created_entity.destroy()
+    end
+end
+
+
+-- TOOD: Do we want on_player_dropped_item?
+
+
+
 
 return PlayerHome
