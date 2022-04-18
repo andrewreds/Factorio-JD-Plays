@@ -185,7 +185,7 @@ PlayerHome.OnBuiltEntity = function(event)
     local player = game.get_player(event.player_index)
 
     if player == nil then
-	return
+        return
     end
     
     local team = global.playerHome.playerIdToTeam[player.index]
@@ -195,12 +195,21 @@ PlayerHome.OnBuiltEntity = function(event)
         return
     end
 
+    local to_destroy = false
     if entity.position.y < 0 then
         if team.id == "south" then
-            entity.destroy()
+            to_destroy = true
          end
     elseif team.id == "north" then
-        entity.destroy()
+        to_destroy = true
+    end
+
+    if to_destroy then
+        entity.surface.create_entity({name="flying-text", position=entity.position, text="Cannot build on other side of wall"})
+
+        if not player.mine_entity(entity, true) then
+            entity.destroy()
+        end
     end
 end
 
