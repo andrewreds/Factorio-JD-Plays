@@ -1,10 +1,13 @@
 local PlayerHome = {}
-local Events = require("utility/events")
-local Utils = require("utility/utils")
-local Logging = require("utility/logging")
-local Interfaces = require("utility/interfaces")
 
-local SpawnYOffset = 20
+local Commands = require("utility/commands")
+local Events = require("utility/events")
+local Interfaces = require("utility/interfaces")
+local Logging = require("utility/logging")
+local Utils = require("utility/utils")
+
+local SpawnYOffset = 100
+local SpawnXOffset = -100
 
 PlayerHome.CreateGlobals = function()
     global.playerHome = global.playerHome or {}
@@ -20,28 +23,33 @@ PlayerHome.CreateGlobals = function()
         }
     ]]
     global.playerHome.playerIdToTeam = global.playerHome.playerIdToTeam or {}
+    global.playerHome.waitingRoomPlayers = global.playerHome.waitingRoomPlayers or {}
 
 end
 
 PlayerHome.OnLoad = function()
-    Events.RegisterHandlerEvent(defines.events.on_player_respawned, "PlayerHome.OnPlayerSpawn", PlayerHome.OnPlayerSpawn)
+    Events.RegisterHandlerEvent(defines.events.on_surface_created, "PlayerHome.OnSurfaceCreated", PlayerHome.OnSurfaceCreated)
     Events.RegisterHandlerEvent(defines.events.on_player_created, "PlayerHome.OnPlayerCreated", PlayerHome.OnPlayerCreated)
     Events.RegisterHandlerEvent(defines.events.on_marked_for_deconstruction, "PlayerHome.OnMarkedForDeconstruction", PlayerHome.OnMarkedForDeconstruction)
     Events.RegisterHandlerEvent(defines.events.on_built_entity, "PlayerHome.OnBuiltEntity", PlayerHome.OnBuiltEntity)
+
+    -- use direct api as micro optimization
     Events.RegisterHandlerEvent(defines.events.on_entity_damaged, "PlayerHome.OnEntityDamaged", PlayerHome.OnEntityDamaged, {
         -- Don't give us biter damage events
         -- Worms are "turrents". So this filter doesn't include them :(
         {filter = "type", type = "unit", invert = true},
         {filter = "type", type = "unit-spawner", invert = true, mode = "and"},
     })
+
+    Commands.Register("jd_spider_race_team", "Assign <player> to team <team>", PlayerHome.AssignTeam, true)
 end
 
 PlayerHome.OnStartup = function()
     Utils.DisableIntroMessage()
 
     if global.playerHome.teams["north"] == nil then
-        PlayerHome.CreateTeam("north", global.divider.dividerMiddleYPos - SpawnYOffset)
-        PlayerHome.CreateTeam("south", global.divider.dividerMiddleYPos + SpawnYOffset)
+        PlayerHome.CreateTeam("north", global.divider.dividerMiddleYPos - SpawnYOffset, SpawnXOffset)
+        PlayerHome.CreateTeam("south", global.divider.dividerMiddleYPos + SpawnYOffset, SpawnXOffset)
         global.playerHome.teams["north"].otherTeam = global.playerHome.teams["south"]
         global.playerHome.teams["south"].otherTeam = global.playerHome.teams["north"]
     end
@@ -59,6 +67,83 @@ PlayerHome.OnStartup = function()
     north_enemy.set_cease_fire(south_enemy, true)
     south_enemy.set_cease_fire(north, true)
     south_enemy.set_cease_fire(north_enemy, true)
+
+    -- don't allow firendly fire from spider nukes
+    north_enemy.friendly_fire = false
+    south_enemy.friendly_fire = false
+
+    -- Create permission group for waiting room
+    local group = game.permissions.get_group("JDWaitingRoom") or game.permissions.create_group("JDWaitingRoom")
+    for _, perm in pairs(defines.input_action) do
+        group.set_allows_action(perm, false)
+    end
+
+    -- Allow spamming of chat if forgotten to be placed in a group
+    group.set_allows_action(defines.input_action.write_to_console, true)
+
+    -- For admins, if things go badly wrong
+    group.set_allows_action(defines.input_action.edit_permission_group, true)
+
+    -- Create the surface with the same parameters as nauvis
+    local surface = game.surfaces["jd-spider-race"]
+    if surface == nil then
+        -- Use the nauvis settings, but with dual spawn
+        local map_gen_settings = Utils.DeepCopy(game.surfaces["nauvis"].map_gen_settings)
+        map_gen_settings.starting_points = {
+            global.playerHome.teams["north"].spawnPosition,
+            global.playerHome.teams["south"].spawnPosition,
+        }
+
+        surface = game.create_surface("jd-spider-race", map_gen_settings)
+
+        -- wft factorio. Why no surface created event???
+        PlayerHome.OnSurfaceCreated({surface_index=surface.index})
+    end
+end
+
+PlayerHome.OnSurfaceCreated = function(event)
+    local surface = nil
+
+    if event ~= nil then
+        surface = game.surfaces[event.surface_index]
+        if surface == nil or not surface.valid then
+            return
+        end
+    else
+        surface = game.surfaces["nauvis"]
+    end
+
+    -- Set spawn points of our forces
+    game.forces["north"].set_spawn_position(
+        global.playerHome.teams["north"].spawnPosition, surface
+    )
+    game.forces["south"].set_spawn_position(
+        global.playerHome.teams["south"].spawnPosition, surface
+    )
+end
+
+PlayerHome.AssignTeam = function(event)
+    local args = Commands.GetArgumentsFromCommand(event.parameter)
+    if #args ~= 2 then
+        game.print("ERROR: expecting two args!")
+        return
+    end
+
+    local player_name = args[1]
+    local team_name = args[2]
+
+    local team = global.playerHome.teams[team_name]
+    if team == nil then
+        game.print("ERROR: Unknown team: "..team_name)
+        return
+    end
+
+    PlayerHome.AddPlayerNameToTeam(player_name, team)
+
+    local player = game.players[player_name]
+    if player ~= nil then
+        PlayerHome.UpdateTeam(player, team)
+    end
 end
 
 PlayerHome.OnEntityDamaged = function(event)
@@ -90,10 +175,10 @@ PlayerHome.OnEntityDamaged = function(event)
 end
 
 
-PlayerHome.CreateTeam = function(teamId, spawnYPos)
+PlayerHome.CreateTeam = function(teamId, spawnYPos, spawnXPos)
     local team = {
         id = teamId,
-        spawnPosition = {x = 0, y = spawnYPos},
+        spawnPosition = {x = spawnXPos, y = spawnYPos},
         playerIds = {},
         playerNames = {}
     }
@@ -108,6 +193,31 @@ PlayerHome.AddPlayerNameToTeam = function(playerName, team)
     team.playerNames[playerName] = playerName
 end
 
+PlayerHome.UpdateTeam = function(player, team)
+    game.print("Player "..player.name.." is now on team: "..team.id)
+
+    local expected_perms = global.playerHome.waitingRoomPlayers[player.index]
+    if expected_perms ~= nil then
+        -- player is in the waiting room
+        global.playerHome.waitingRoomPlayers[player.index] = nil
+
+        player.permission_group = game.permissions.get_group(expected_perms)
+        player.create_character()
+    end
+
+    team.playerIds[player.index] = player
+    global.playerHome.playerIdToTeam[player.index] = team
+
+    -- move player to correct spawn
+    if expected_perms == nil then
+        player.character.die()
+    else
+        PlayerHome.OnPlayerSpawn({player_index=player.index})
+    end
+
+    player.force = game.forces[team.id]
+end
+
 PlayerHome.OnPlayerCreated = function(event)
     local player = game.get_player(event.player_index)
 
@@ -115,27 +225,14 @@ PlayerHome.OnPlayerCreated = function(event)
         -- So we have a player character to teleport.
         player.exit_cutscene()
     end
-    -- Check if player is on the named list.
-    local team
-    for _, teamToCheck in pairs(global.playerHome.teams) do
-        if teamToCheck.playerNames[player.name] ~= nil then
-            team = teamToCheck
-            break
-        end
-    end
-    -- If player isn't named give them a random team.
-    if team == nil then
-        local teamNames = Utils.TableKeyToArray(global.playerHome.teams)
-        team = global.playerHome.teams[teamNames[math.random(1, 2)]]
-        PlayerHome.AddPlayerNameToTeam(player.name, team)
-        game.print("Player '" .. player.name .. "' isn't set on a team, so added to the '" .. team.id .. "' randomly")
-    end
-    --Record the player ID to the team, rather than relying on names.
-    team.playerIds[player.index] = player
-    global.playerHome.playerIdToTeam[player.index] = team
 
-    player.force = game.forces[team.id]
-    PlayerHome.OnPlayerSpawn(event)
+    -- Place player in waiting room
+    global.playerHome.waitingRoomPlayers[player.index] = player.permission_group.name
+    player.character.destroy()
+    player.teleport({0, 0}, game.surfaces["jd-spider-race"])
+    player.permission_group = game.permissions.get_group("JDWaitingRoom")
+    player.print("Welcome! Waiting on an admin to put you on a team...")
+    player.print("You might need to /shout to grab attention")
 end
 
 PlayerHome.OnPlayerSpawn = function(event)
@@ -154,6 +251,8 @@ PlayerHome.OnPlayerSpawn = function(event)
         return
     end
 end
+
+
 
 PlayerHome.OnMarkedForDeconstruction = function(event)
     -- stop deconstruction from the wrong side of the wall

@@ -1,5 +1,7 @@
 local Divider = {}
 local Events = require("utility/events")
+local Logging = require("utility/logging")
+local Utils = require("utility/utils")
 
 Divider.CreateGlobals = function()
     global.divider = global.divider or {}
@@ -16,7 +18,6 @@ Divider.OnLoad = function()
     Events.RegisterHandlerEvent(defines.events.on_player_built_tile, "Divider.OnTilePlaced", Divider.OnTilePlaced)
     Events.RegisterHandlerEvent(defines.events.on_robot_built_tile, "Divider.OnTilePlaced", Divider.OnTilePlaced)
 end
-
 
 Divider.OnChunkGenerated = function(event)
     local surface, area = event.surface, event.area
@@ -72,13 +73,14 @@ Divider.OnChunkGenerated = function(event)
 
 end
 
+
 Divider.OnTilePlaced = function(event)
     if event.tile.name ~= "landfill" then
         return
     end
     local surface, landTilesToReplace = game.surfaces[event.surface_index], {}
     for _, tileReplaced in pairs(event.tiles) do
-        if tileReplaced.position.x >= global.divider.dividerStartXPos and tileReplaced.position.x <= global.divider.dividerEndXPos then
+        if tileReplaced.position.y >= global.divider.dividerStartYPos and tileReplaced.position.y <= global.divider.dividerEndYPos then
             table.insert(landTilesToReplace, {name = "jd_plays-jd_spider_race-divider_tile_land", position = tileReplaced.position})
         end
     end
